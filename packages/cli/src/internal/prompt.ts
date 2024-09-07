@@ -178,55 +178,37 @@ export const run = <Output>(
         return makeStateRef.pipe(
           Effect.flatMap((ref) => {
             const loop = (
-              action: Exclude<Prompt.Prompt.Action<unknown, unknown>, { _tag: "Submit" }>
+              _action: Exclude<Prompt.Prompt.Action<unknown, unknown>, { _tag: "Submit" }>
             ): Effect.Effect<any, Terminal.QuitException, Prompt.Prompt.Environment> =>
-              Ref.get(ref).pipe(
-                Effect.flatMap((state) =>
-                  op.render(state, action).pipe(
-                    Effect.flatMap((msg) => Effect.orDie(terminal.display(msg))),
-                    Effect.zipRight(terminal.readInput),
-                    Effect.flatMap((inputs) => {
-                      let _action: Prompt.Prompt.Action<unknown, unknown> = Action.Beep()
+              Effect.gen(function*() {
+                const state = yield* Ref.get(ref)
+                const msg = yield* op.render(state, _action)
+                yield* Effect.orDie(terminal.display(msg))
 
-                      for (const input of inputs) {
-                        Ref.get(ref).pipe(
-                          Effect.flatMap((state) => op.process(input, state)),
-                          Effect.map((action) => {
-                            _action = action
-                            if (action._tag === "NextFrame") {
-                              Ref.set(ref, action.state)
-                            }
-                          })
-                        )
-                      }
+                const input = yield* terminal.readInput
+                const action = yield* op.process(input, state)
 
-                      return Effect.succeed(_action as Prompt.Prompt.Action<unknown, unknown>)
-                    }),
-                    Effect.flatMap((action) => {
-                      switch (action._tag) {
-                        case "Beep": {
-                          return loop(action)
-                        }
-                        case "NextFrame": {
-                          return op.clear(state, action).pipe(
-                            Effect.flatMap((clear) => Effect.orDie(terminal.display(clear))),
-                            Effect.zipRight(Ref.set(ref, action.state)),
-                            Effect.zipRight(loop(action))
-                          )
-                        }
-                        case "Submit": {
-                          return op.clear(state, action).pipe(
-                            Effect.flatMap((clear) => Effect.orDie(terminal.display(clear))),
-                            Effect.zipRight(op.render(state, action)),
-                            Effect.flatMap((msg) => Effect.orDie(terminal.display(msg))),
-                            Effect.zipRight(Effect.succeed(action.value))
-                          )
-                        }
-                      }
-                    })
-                  )
-                )
-              )
+                switch (action._tag) {
+                  case "Beep": {
+                    return yield* loop(action)
+                  }
+                  case "NextFrame": {
+                    const clear = yield* op.clear(state, action)
+                    yield* Effect.orDie(terminal.display(clear))
+                    yield* Ref.set(ref, action.state)
+                    return yield* loop(action)
+                  }
+                  case "Submit": {
+                    const clear = yield* op.clear(state, action)
+                    yield* Effect.orDie(terminal.display(clear))
+
+                    const msg = yield* op.render(state, action)
+                    yield* Effect.orDie(terminal.display(msg))
+                    return action.value
+                  }
+                }
+              })
+
             return Ref.get(ref).pipe(
               Effect.flatMap((state) => loop(Action.NextFrame({ state })))
             )

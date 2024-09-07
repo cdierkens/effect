@@ -23,7 +23,7 @@ export interface Terminal {
   /**
    * Reads a single input event from the default standard input.
    */
-  readonly readInput: Effect<Array<UserInput>, QuitException>
+  readonly readInput: Effect<UserInput, QuitException>
   /**
    * Reads a single line from the default standard input.
    */
