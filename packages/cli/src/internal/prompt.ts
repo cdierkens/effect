@@ -185,7 +185,23 @@ export const run = <Output>(
                   op.render(state, action).pipe(
                     Effect.flatMap((msg) => Effect.orDie(terminal.display(msg))),
                     Effect.zipRight(terminal.readInput),
-                    Effect.flatMap((input) => op.process(input, state)),
+                    Effect.flatMap((inputs) => {
+                      let _action: Prompt.Prompt.Action<unknown, unknown> = Action.Beep()
+
+                      for (const input of inputs) {
+                        Ref.get(ref).pipe(
+                          Effect.flatMap((state) => op.process(input, state)),
+                          Effect.map((action) => {
+                            _action = action
+                            if (action._tag === "NextFrame") {
+                              Ref.set(ref, action.state)
+                            }
+                          })
+                        )
+                      }
+
+                      return Effect.succeed(_action as Prompt.Prompt.Action<unknown, unknown>)
+                    }),
                     Effect.flatMap((action) => {
                       switch (action._tag) {
                         case "Beep": {

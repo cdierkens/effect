@@ -44,8 +44,15 @@ export const make = (
 
     // Handle the `"keypress"` event emitted by `stdin` (forced by readline)
     const handleKeypressEvent = (input: typeof globalThis.process.stdin) =>
-      Effect.async<Terminal.UserInput, Terminal.QuitException>((resume) => {
+      Effect.async<Array<Terminal.UserInput>, Terminal.QuitException>((resume) => {
+        const inputs: Array<Terminal.UserInput> = []
+        const resolve = () => resume(Effect.succeed(inputs))
+        let timer = setTimeout(resolve, 50)
+
         const handleKeypress = (input: string | undefined, key: readline.Key) => {
+          clearTimeout(timer)
+          timer = setTimeout(resolve, 50)
+
           const userInput: Terminal.UserInput = {
             input: Option.fromNullable(input),
             key: {
@@ -58,10 +65,10 @@ export const make = (
           if (shouldQuit(userInput)) {
             resume(Effect.fail(new Terminal.QuitException()))
           } else {
-            resume(Effect.succeed(userInput))
+            inputs.push(userInput)
           }
         }
-        input.once("keypress", handleKeypress)
+        input.on("keypress", handleKeypress)
         return Effect.sync(() => {
           input.removeListener("keypress", handleKeypress)
         })
